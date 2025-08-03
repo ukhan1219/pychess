@@ -71,9 +71,9 @@ The project is structured as a journey of increasing scale and sophistication:
     - Download the Stockfish executable for your OS and place it in the project root.
     - Download the Lichess game data (`wget ...`, `unzstd ...`).
     - Example for chess game data
-        ``` bash
-          wget -P data/raw/ https://database.lichess.org/standard/lichess_db_standard_rated_2024-08.pgn.zst
-        ```
+      ``` bash
+        wget -P data/raw/ https://database.lichess.org/standard/lichess_db_standard_rated_2024-08.pgn.zst
+      ```
     
 
 3.  **Execute the pipeline scripts in order:**
