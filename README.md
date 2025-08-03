@@ -72,7 +72,7 @@ The project is structured as a journey of increasing scale and sophistication:
     - Download the Lichess game data (`wget ...`, `unzstd ...`).
     - Example for chess game data
       ``` bash
-        wget -P data/raw/ https://database.lichess.org/standard/lichess_db_standard_rated_2024-08.pgn.zst
+      wget -P data/raw/ https://database.lichess.org/standard/lichess_db_standard_rated_2024-08.pgn.zst
       ```
     
 
