@@ -70,6 +70,11 @@ The project is structured as a journey of increasing scale and sophistication:
 2.  **Download dependencies:**
     - Download the Stockfish executable for your OS and place it in the project root.
     - Download the Lichess game data (`wget ...`, `unzstd ...`).
+    - Example for chess game data
+    > ``` bash
+    wget -P data/raw/ https://database.lichess.org/standard/lichess_db_standard_rated_2024-08.pgn.zst
+    ```
+    
 
 3.  **Execute the pipeline scripts in order:**
 
@@ -86,6 +91,71 @@ The project is structured as a journey of increasing scale and sophistication:
     python scripts/05_run_rl_training.py ...
     python scripts/06_evaluate_models.py ...
     ```
+
+4. **Overall Project Structure:**
+    - If doing local experimentation:
+    ``` bash
+chessmaster-rl/
+├── data/
+│   ├── raw/
+│   │   └── lichess_elite_2023-11.pgn   # Raw PGN game data from Lichess
+│   └── processed/
+│       ├── sft_dataset.jsonl           # Games formatted for SFT
+│       └── preference_dataset.jsonl    # (State, Chosen, Rejected) pairs for RM
+│
+├── models/
+│   ├── sft_model/                      # Fine-tuned model (knows chess language)
+│   ├── reward_model/                   # Reward model (the "judge")
+│   └── rl_model/                       # Final, RL-tuned policy model
+│
+├── scripts/
+│   ├── 01_prepare_sft_data.py          # Parses PGNs into a text dataset
+│   ├── 02_run_sft.py                   # Runs Supervised Fine-Tuning
+│   ├── 03_generate_preference_data.py  # Creates preference pairs using Stockfish
+│   ├── 04_train_reward_model.py        # Trains the reward model
+│   ├── 05_run_rl_training.py           # Runs PPO reinforcement learning
+│   └── 06_evaluate_models.py           # Pits models against each other
+│
+├── src/
+│   └── chess_utils.py                  # Helper functions (e.g., Stockfish interaction)
+│
+├── stockfish                           # The Stockfish chess engine executable
+│
+└── run_pipeline.sh                     # Master script to automate the entire local pipeline
+```
+
+    - If wanting to use cloud deployment:
+    ``` bash
+    chessmaster-rl/
+├── .github/
+│   └── workflows/
+│       └── ci.yml                # Optional: GitHub Actions for CI/CD
+├── data/
+│   └── .gitkeep                  # Data is stored on S3, not in the repo
+├── deployment/
+│   ├── Dockerfile                # Packages the application
+│   ├── requirements.txt          # Python dependencies
+│   └── step_functions.json       # AWS Step Functions workflow definition
+├── models/
+│   └── .gitkeep                  # Models are stored on S3/MLflow, not in the repo
+├── scripts/
+│   ├── 01_prepare_sft_data.py
+│   ├── 02_run_sft.py
+│   ├── 03_generate_preference_data.py
+│   ├── 04_train_reward_model.py
+│   ├── 05_run_rl_training.py
+│   └── 06_evaluate_models.py
+├── src/
+│   └── chess_utils/
+│       ├── __init__.py
+│       └── engine.py             # Logic for interacting with Stockfish
+│       └── model_players.py      # Classes for HFPlayer, StockfishPlayer
+├── tests/
+│   ├── test_chess_utils.py       # Unit tests for your helper functions
+│   └── test_pipeline_steps.py    # Integration tests for individual scripts
+├── .gitignore                    # Ignores virtual env, pycache, etc.
+└── README.md                     # Your project's front page
+```
 
 ### Part 2: Deploying the Scaled Pipeline (Phases 4-5)
 
