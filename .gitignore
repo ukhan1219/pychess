@@ -12,7 +12,6 @@ __pycache__/
 # These are downloaded or generated from the source code.
 # The README should explain how to generate them.
 data/raw/lichess_db_standard_rated_2024-08.pgn.zst
-data/processed/sft_dataset_filtered.jsonl
 
 # Models and Checkpoints
 # These are artifacts produced by the training scripts.
