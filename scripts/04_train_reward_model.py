@@ -6,7 +6,7 @@ from transformers import (
     TrainingArguments,
 )
 from datasets import load_dataset
-from trl import RewardTrainer
+from trl import RewardTrainer, RewardConfig
 import torch
 
 
@@ -34,7 +34,7 @@ def main(args):
 
     dataset = dataset.map(format_dataset)
 
-    training_args = TrainingArguments(
+    training_args = RewardConfig(
         output_dir=args.output_dir,
         per_device_train_batch_size=4,
         num_train_epochs=1,
