@@ -16,7 +16,8 @@ data/processed/sft_dataset_filtered.jsonl
 
 # Models and Checkpoints
 # These are artifacts produced by the training scripts.
-models/
+models/sft_model/checkpoint-*/
+
 
 # Log files
 logs/

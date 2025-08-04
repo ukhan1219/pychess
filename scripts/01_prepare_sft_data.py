@@ -14,39 +14,7 @@ import datetime
 """
 
 
-def is_game_high_quality(game, min_elo=2000):
-    """
-    Applies a series of quality checks to determine if a game is of high quality.
-    """
-
-    headers = game.headers
-
-    if headers.get("WhiteTitle") == "BOT" or headers.get("BlackTitle") == "BOT":
-        return False
-
-    try:
-        if (
-            int(headers.get("WhiteElo", 0)) < min_elo
-            or int(headers.get("BlackElo", 0)) < min_elo
-        ):
-            return False
-
-    except (ValueError, TypeError):
-        return False
-
-    try:
-        game_date_str = headers.get("Date", "1970.01.01")
-        game_date = datetime.datetime.strptime(game_date_str, "%Y.%m.%d").date()
-        if game_date == datetime.date(2021, 3, 12):
-            return False
-
-    except ValueError:
-        return False
-
-    if headers.get("Termination", "Normal") != "Normal":
-        return False
-
-    return True
+from src.chess_utils import is_game_high_quality
 
 
 def game_to_move_sequence(game):
@@ -64,6 +32,7 @@ def game_to_move_sequence(game):
     # mainline_moves() returns a generator of moves
     for move in game.mainline_moves():
         san_move = board.san(move)
+        
         moves.append(san_move)
 
         board.push(move)

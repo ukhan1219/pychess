@@ -10,14 +10,14 @@ import torch
 import random
 
 STOCKFISH_PATH = "./stockfish/stockfish-macos-x86-64-bmi2"
+STOCKFISH_PATH_WSL = "./stockfish/stockfish-ubuntu-x86-64-avx2"
 
+from src.chess_utils import is_game_high_quality
 
-def get_sft_move(model, tokenizer, board):
+def get_sft_move(model, tokenizer, board, prompt):
     """
     Generate a move using the SFT model.
     """
-
-    prompt = " ".join([board.san(move) for move in board.move_stack])
     if not prompt:
         prompt = "1."
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
@@ -25,33 +25,39 @@ def get_sft_move(model, tokenizer, board):
     output_sequences = model.generate(
         input_ids=inputs["input_ids"],
         max_new_tokens=5,
-        num_return_sequences=1,
+        num_return_sequences=5,
         do_sample=True,
         top_k=50,
         top_p=0.95,
         pad_token_id=tokenizer.eos_token_id,
     )
 
-    generated_text = tokenizer.decode(output_sequences[0], skip_special_tokens=True)
-
-    move_str = generated_text.replace(prompt, "").strip().split(" ")[0]
-    return move_str
+    full_texts = tokenizer.batch_decode(output_sequences, skip_special_tokens=True)
+    
+    for text in full_texts:
+        try:
+            move_str = text.replace(prompt, "").strip().split(" ")[0]
+            move = board.parse_san(move_str)
+            if move in board.legal_moves:
+                return move_str
+        except:
+            continue
+        
+    return None
 
 
 def main(args):
     print("Loading SFT model...")
-
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
 
     sft_model = AutoModelForCausalLM.from_pretrained(args.sft_model_path).to(device)
     tokenizer = AutoTokenizer.from_pretrained(args.sft_model_path)
-
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     print("Starting STOCKFISH engine...")
-    engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH)
+    engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH_WSL)
 
     if args.input_games_file:
         print(f"Opening PGN file: {args.input_games_file}")
@@ -61,60 +67,81 @@ def main(args):
         pgn_stream = sys.stdin
 
     preference_data = []
-
+    processed_games = 0
     pbar = tqdm(total=args.num_samples, desc="Processing games")
-
     game_iterator = iter(lambda: chess.pgn.read_game(pgn_stream), None)
 
     for game in game_iterator:
         if len(preference_data) >= args.num_samples:
             break
-
         if game is None:
             continue
+        
+        processed_games += 1
+        pbar.set_postfix({"Samples Found": len(preference_data), "Processed Games": processed_games})
+        
+        if not is_game_high_quality(game, args.min_elo):
+            continue
 
-        board = game.board()
+        try:
+            mainline_moves = list(game.mainline_moves())
+            if len(mainline_moves) < 5: 
+                continue
+            
+            move_index = random.randint(10, len(mainline_moves) - 1)
+            
+            board = game.board()
+            for i in range(move_index):
+                board.push(mainline_moves[i])
+            
+            temp_board_for_san = game.board()
+            prompt_moves = []
+            for i in range(move_index):
+                move = mainline_moves[i]
+                prompt_moves.append(temp_board_for_san.san(move))
+                temp_board_for_san.push(move)
+            prompt = " ".join(prompt_moves)
+            
+            sft_move_san = get_sft_move(sft_model, tokenizer, board, prompt)
+            if sft_move_san is None:
+                continue
+            
+            print(f"\n[DEBUG] Board FEN: {board.fen()}")
+            print(f"[DEBUG] Prompt: '{prompt}'")
+            print(f"[DEBUG] SFT Model Raw Output: '{sft_move_san}'")
+            
+            try:
+                sft_move = board.parse_san(sft_move_san)
+                if sft_move not in board.legal_moves:
+                    print(f"[DEBUG] Result: REJECTED (Illegal Move)")
+                    continue # Skip if the parsed move is not legal
+            except (chess.InvalidMoveError, chess.IllegalMoveError, chess.AmbiguousMoveError) as e:
+                print(f"[DEBUG] Result: REJECTED (Parsing Error: {e})")
+                continue # Skip if the move string is malformed
+            
+            print(f"[DEBUG] Result: ACCEPTED as legal move.")
 
-        for move in game.mainline_moves():
-            board.push(move)
+            result = engine.play(board, chess.engine.Limit(time=0.1))
+            stockfish_move = result.move
+            
+            if sft_move != stockfish_move:
+                preference_data.append({
+                    "prompt": prompt,
+                    "chosen": board.san(stockfish_move),
+                    "rejected": board.san(sft_move),
+                })
+                pbar.update(1)
 
-            if random.random() < args.sampling_ratio:
-                try:
-                    sft_move_san = get_sft_move(sft_model, tokenizer, board)
-
-                    sft_move = board.parse_san(sft_move_san)
-
-                    result = engine.play(board, chess.engine.Limit(time=0.1))
-                    stockfish_move = result.move
-
-                    if sft_move != stockfish_move:
-                        preference_data.append(
-                            {
-                                "prompt": " ".join(
-                                    [board.san(m) for m in board.move_stack]
-                                ),
-                                "chosen": board.san(stockfish_move),
-                                "rejected": board.san(sft_move),
-                            }
-                        )
-
-                        pbar.update(1)
-                        if len(preference_data) >= args.num_samples:
-                            break
-
-                except Exception:
-                    continue
-
+        except Exception as e:
+            continue
+            
     pbar.close()
-
     engine.quit()
 
-    print(f"Generated {len(preference_data)} preference data samples.")
-
+    print(f"\nGenerated {len(preference_data)} preference data samples.")
     with open(args.output_file, "w") as f:
         for item in preference_data:
             f.write(json.dumps(item) + "\n")
-
     print(f"Preference data saved to {args.output_file}")
 
 
@@ -152,6 +179,12 @@ if __name__ == "__main__":
         default=0.1,
         help="Ratio of moves to sample from each game.",
     )
+    parser.add_argument(
+        "--min_elo",
+        type=int,
+        default=2000,
+        help="Minimum Elo rating for a game to be considered high quality.",
+    )
     args = parser.parse_args()
     main(args)
 
@@ -161,4 +194,5 @@ if __name__ == "__main__":
     --sft_model_path models/sft_model \
     --output_file data/processed/preference_dataset_targeted.jsonl \
     --num_samples 10000
+    zstdcat data/raw/lichess_db_standard_rated_2024-08.pgn.zst | python -m scripts.03_generate_preference_data     --sft_model_path models/sft_model     --output_file data/processed/preference_dataset_targeted.jsonl     --num_samples 10000
 """
