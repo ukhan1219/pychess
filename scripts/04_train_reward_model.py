@@ -86,3 +86,10 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     main(args)
+
+
+"""
+    python scripts/04_train_reward_model.py \
+    --dataset_path data/processed/preference_dataset.jsonl \
+    --output_dir models/reward_model
+"""
