@@ -88,8 +88,8 @@ if __name__ == "__main__":
 
 
 """
-python scripts/04_train_reward_model.py \
+python scripts/04_train_reward_model.py \           phase2 :: 8m :: ⬡
     --base_model distilgpt2 \
     --dataset_path data/processed/preference_dataset_targeted.jsonl \
-    --output_dir models/reward_model_targeted 
+    --output_dir models/reward_model_targeted
 """
