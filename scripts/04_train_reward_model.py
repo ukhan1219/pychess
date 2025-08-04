@@ -7,6 +7,7 @@ from transformers import (
 )
 from datasets import load_dataset
 from trl import RewardTrainer
+import torch
 
 
 def main(args):
@@ -17,7 +18,7 @@ def main(args):
     else:
         print("CUDA is not available. Using FP32 for training.")
 
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+    tokenizer = AutoTokenizer.from_pretrained(args.base_model)
 
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -50,10 +51,8 @@ def main(args):
 
     trainer = RewardTrainer(
         model=model,
-        tokenizer=tokenizer,
         args=training_args,
         train_dataset=dataset,
-        max_length=256,
     )
 
     print("Starting training...")
