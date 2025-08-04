@@ -82,3 +82,10 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     main(args)
+
+
+"""
+python scripts/02_run_sft.py \
+--dataset_path data/processed/sft_dataset_filtered.jsonl \
+--output_dir models/sft_model
+"""
