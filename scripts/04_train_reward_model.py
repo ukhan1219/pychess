@@ -25,9 +25,9 @@ def main(args):
     dataset = load_dataset("json", data_files=args.dataset_path, split="train")
 
     def format_dataset(example):
-        example["chosen"] = example["text"] + " " + example["chosen"]
+        example["chosen"] = example["prompt"] + " " + example["chosen"]
 
-        example["rejected"] = example["text"] + " " + example["rejected"]
+        example["rejected"] = example["prompt"] + " " + example["rejected"]
 
         return example
 
@@ -89,7 +89,8 @@ if __name__ == "__main__":
 
 
 """
-    python scripts/04_train_reward_model.py \
-    --dataset_path data/processed/preference_dataset.jsonl \
-    --output_dir models/reward_model
+python scripts/04_train_reward_model.py \
+    --base_model distilgpt2 \
+    --dataset_path data/processed/preference_dataset_targeted.jsonl \
+    --output_dir models/reward_model_targeted 
 """
