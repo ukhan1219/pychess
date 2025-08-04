@@ -245,9 +245,5 @@ if __name__ == "__main__":
 
 
 """
-    zstdcat data/raw/lichess_db_standard_rated_2024-08.pgn.zst | python scripts/03_generate_preference_data.py \
-    --sft_model_path models/sft_model \
-    --output_file data/processed/preference_dataset_targeted.jsonl \
-    --num_samples 10000
     zstdcat data/raw/lichess_db_standard_rated_2024-08.pgn.zst | python -m scripts.03_generate_preference_data     --sft_model_path models/sft_model     --output_file data/processed/preference_dataset_targeted.jsonl     --num_samples 10000
 """

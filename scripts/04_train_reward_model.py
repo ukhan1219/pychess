@@ -1,12 +1,11 @@
 import argparse
-from numpy import require
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
-    TrainingArguments,
 )
 from datasets import load_dataset
 from trl import RewardTrainer, RewardConfig
+from trl.trainer.reward_trainer import RewardDataCollatorWithPadding
 import torch
 
 
@@ -41,6 +40,7 @@ def main(args):
         logging_steps=10,
         learning_rate=2e-5,
         fp16=use_fp16,
+        bf16=False,
         remove_unused_columns=False,
     )
 
@@ -48,11 +48,13 @@ def main(args):
         args.base_model,
         num_labels=1,
     )
-
+    model.config.pad_token_id = tokenizer.pad_token_id
+    
     trainer = RewardTrainer(
         model=model,
         args=training_args,
         train_dataset=dataset,
+        processing_class=tokenizer,
     )
 
     print("Starting training...")
@@ -88,8 +90,5 @@ if __name__ == "__main__":
 
 
 """
-python scripts/04_train_reward_model.py \           phase2 :: 8m :: ⬡
-    --base_model distilgpt2 \
-    --dataset_path data/processed/preference_dataset_targeted.jsonl \
-    --output_dir models/reward_model_targeted
+python scripts/04_train_reward_model.py --base_model distilgpt2 --dataset_path data/processed/preference_dataset_targeted.jsonl --output_dir models/reward_model_targeted
 """
