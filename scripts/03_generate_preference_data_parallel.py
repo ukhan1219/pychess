@@ -207,7 +207,7 @@ def worker_process(worker_id, game_queue, result_queue, args):
                             continue
                         
                         try:
-                            result = engine.play(board, chess.engine.Limit(time=0.1))
+                            result = engine.play(board, chess.engine.Limit(time=0.1, depth=10))
                             stockfish_move = result.move
                             
                             if sft_move != stockfish_move:
