@@ -4,6 +4,10 @@ import json
 from tqdm import tqdm
 import sys
 import datetime
+import os
+
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
 
 """
     this script processes chess games in PGN format and prepares them for supervised fine-tuning (SFT).
@@ -113,13 +117,11 @@ if __name__ == "__main__":
 # Make sure you have zstd installed (e.g., sudo apt-get install zstd)
 """
 MAC:
-zstdcat data/raw/lichess_db_standard_rated_2024-08.pgn.zst | python -m scripts/01_prepare_sft_data.py \
-    --input_file - \
-    --output_file data/processed/sft_dataset_filtered.jsonl \
-    --max_games 1000000 \
-    --min_elo 2000
-    
-WSL:
+    zstdcat data/raw/lichess_db_standard_rated_2024-08.pgn.zst | python scripts/01_prepare_sft_data.py \
+        --input_file - \
+        --output_file data/processed/sft_dataset_filtered.jsonl \
+        --max_games 1000000 \
+        --min_elo 2000
 
 """
 

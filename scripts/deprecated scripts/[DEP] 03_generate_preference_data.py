@@ -4,6 +4,7 @@ import chess.engine
 import argparse
 import json
 import sys
+import re
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
@@ -35,11 +36,13 @@ def get_sft_move(model, tokenizer, board, prompt):
     # this generates multiple sequences to increase the chance of getting a legal move
     output_sequences = model.generate(
         input_ids=inputs["input_ids"],
-        max_new_tokens=5,
-        num_return_sequences=5,
+        max_new_tokens=8,                       # increased for longer algebraic notation (e.g., "Nbd7", "O-O-O") previously 5
+        num_return_sequences=8,                 # more candidates for better move selection previously 5
         do_sample=True,
-        top_k=50,
-        top_p=0.95,
+        top_k=40,                               # slightly reduced for more focused sampling previously 50
+        top_p=0.9,                              # slightly reduced for better quality moves previously 0.95
+        temperature=0.8,                        # added temperature for controlled randomness previously not needed
+        repetition_penalty=1.1,                 # prevents repetitive tokens previously not needed
         pad_token_id=tokenizer.eos_token_id,
     )
 
@@ -74,7 +77,7 @@ def main(args):
 
     # we start the Stockfish engine
     print("Starting STOCKFISH engine...")
-    engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH)
+    engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH_WSL)
 
     # here we open the PGN file or read from stdin
     if args.input_games_file:
@@ -115,7 +118,7 @@ def main(args):
         try:
             # mainline_moves gives us the moves in the game which we can index into
             mainline_moves = list(game.mainline_moves())
-            if len(mainline_moves) < 5:
+            if len(mainline_moves) < 10:  # Ensure game has enough moves for middle game sampling previously 5
                 continue
 
             # move index is chosen randomly but not too close to the start or end
@@ -171,8 +174,8 @@ def main(args):
             print(f"[DEBUG] Result: ACCEPTED as legal move.")
 
             # result is the Stockfish engine's analysis of the current board position
-            # and we limit the time to 0.1 seconds for quick evaluation
-            result = engine.play(board, chess.engine.Limit(time=0.1))
+            # increased time for more accurate analysis for better preference data
+            result = engine.play(board, chess.engine.Limit(time=0.1, depth=10)) # previous time was 0.1 and depth was not set
             stockfish_move = result.move
 
             # if the moves are different, we store the preference data
@@ -225,7 +228,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_samples",
         type=int,
-        default=1000,
+        default=500000, 
         help="Number of preference data samples to generate.",
     )
     parser.add_argument(
@@ -245,5 +248,8 @@ if __name__ == "__main__":
 
 
 """
-    zstdcat data/raw/lichess_db_standard_rated_2024-08.pgn.zst | python -m scripts.03_generate_preference_data     --sft_model_path models/sft_model     --output_file data/processed/preference_dataset_targeted.jsonl     --num_samples 100000
+zstdcat data/raw/lichess_db_standard_rated_2024-08.pgn.zst | python -m scripts.03_generate_preference_data \
+    --sft_model_path models/sft_model \
+    --output_file data/processed/preference_dataset_targeted.jsonl \
+    --num_samples 750000
 """
