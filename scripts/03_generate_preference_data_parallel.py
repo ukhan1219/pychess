@@ -9,6 +9,8 @@ import random
 import multiprocessing as mp
 import queue
 import time
+import os
+import glob
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
@@ -20,6 +22,54 @@ STOCKFISH_PATH_WSL = "./stockfish/stockfish-ubuntu-x86-64-avx2"
 from src.chess_utils import is_game_high_quality
 
 logging.getLogger("transformers").setLevel(logging.ERROR)
+
+def save_checkpoint(preference_data, output_file, checkpoint_num):
+    """save a checkpoint of the preference data."""
+    checkpoint_file = f"{output_file}.checkpoint_{checkpoint_num:03d}"
+    with open(checkpoint_file, "w") as f:
+        for item in preference_data:
+            f.write(json.dumps(item) + "\n")
+    print(f"Checkpoint saved: {checkpoint_file} ({len(preference_data)} samples)")
+    return checkpoint_file
+
+def cleanup_old_checkpoints(output_file, keep_last=3):
+    """remove old checkpoint files, keeping only the last N."""
+    checkpoint_pattern = f"{output_file}.checkpoint_*"
+    checkpoint_files = sorted(glob.glob(checkpoint_pattern))
+    
+    if len(checkpoint_files) > keep_last:
+        files_to_remove = checkpoint_files[:-keep_last]
+        for file_path in files_to_remove:
+            try:
+                os.remove(file_path)
+                print(f"Removed old checkpoint: {file_path}")
+            except OSError as e:
+                print(f"Warning: Could not remove {file_path}: {e}")
+
+def load_existing_checkpoints(output_file):
+    """load existing checkpoint data if available."""
+    checkpoint_pattern = f"{output_file}.checkpoint_*"
+    checkpoint_files = sorted(glob.glob(checkpoint_pattern))
+    
+    if not checkpoint_files:
+        return []
+    
+    latest_checkpoint = checkpoint_files[-1]
+    print(f"Loading existing checkpoint: {latest_checkpoint}")
+    
+    preference_data = []
+    try:
+        with open(latest_checkpoint, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    preference_data.append(json.loads(line))
+        print(f"Loaded {len(preference_data)} samples from checkpoint")
+    except Exception as e:
+        print(f"Error loading checkpoint: {e}")
+        return []
+    
+    return preference_data
 
 def get_sft_move_batch(model, tokenizer, positions_data):
     if not positions_data:
@@ -244,6 +294,16 @@ def main(args):
     print(f"Starting parallel preference data generation with {args.num_workers} workers...")
     print(f"Target: {args.num_samples} samples")
     
+    # load existing checkpoint data if available
+    preference_data = load_existing_checkpoints(args.output_file)
+    starting_samples = len(preference_data)
+    
+    if starting_samples > 0:
+        print(f"Resuming from checkpoint with {starting_samples} existing samples")
+        if starting_samples >= args.num_samples:
+            print(f"Already have {starting_samples} samples, which meets the target of {args.num_samples}")
+            return
+    
     game_queue = mp.Queue(maxsize=args.num_workers * 10)
     result_queue = mp.Queue()
     
@@ -283,11 +343,12 @@ def main(args):
     producer_thread = threading.Thread(target=game_producer)
     producer_thread.start()
     
-    preference_data = []
-    pbar = tqdm(total=args.num_samples, desc="Collecting samples")
+    pbar = tqdm(total=args.num_samples, initial=starting_samples, desc="Collecting samples")
     
     start_time = time.time()
     last_update = start_time
+    last_checkpoint = starting_samples
+    checkpoint_interval = args.checkpoint_interval
     
     try:
         while len(preference_data) < args.num_samples:
@@ -300,10 +361,17 @@ def main(args):
                 preference_data.append(result)
                 pbar.update(1)
                 
+                # check if we should save a checkpoint
+                if len(preference_data) - last_checkpoint >= checkpoint_interval:
+                    checkpoint_num = len(preference_data) // checkpoint_interval
+                    save_checkpoint(preference_data, args.output_file, checkpoint_num)
+                    cleanup_old_checkpoints(args.output_file, keep_last=3)
+                    last_checkpoint = len(preference_data)
+                
                 current_time = time.time()
                 if current_time - last_update > 30:
                     elapsed = current_time - start_time
-                    rate = len(preference_data) / elapsed
+                    rate = len(preference_data) / elapsed if elapsed > 0 else 0
                     eta = (args.num_samples - len(preference_data)) / rate if rate > 0 else 0
                     print(f"Progress: {len(preference_data)}/{args.num_samples} samples "
                           f"({rate:.1f} samples/sec, ETA: {eta/3600:.1f}h)")
@@ -318,6 +386,11 @@ def main(args):
                 
     except KeyboardInterrupt:
         print("Interrupted by user")
+        # save a final checkpoint on interruption
+        if len(preference_data) > last_checkpoint:
+            checkpoint_num = (len(preference_data) // checkpoint_interval) + 1
+            save_checkpoint(preference_data, args.output_file, checkpoint_num)
+            cleanup_old_checkpoints(args.output_file, keep_last=3)
     
     pbar.close()
     
@@ -329,14 +402,22 @@ def main(args):
     
     print(f"\nGenerated {len(preference_data)} preference data samples.")
     
+    # save final output file
     with open(args.output_file, "w") as f:
         for item in preference_data:
             f.write(json.dumps(item) + "\n")
     print(f"Preference data saved to {args.output_file}")
     
+    # create a final checkpoint if we have new data
+    if len(preference_data) > last_checkpoint:
+        final_checkpoint_num = (len(preference_data) - 1) // checkpoint_interval + 1
+        save_checkpoint(preference_data, args.output_file, final_checkpoint_num)
+        cleanup_old_checkpoints(args.output_file, keep_last=3)
+    
     elapsed = time.time() - start_time
     print(f"Total time: {elapsed/3600:.2f} hours ({elapsed/60:.1f} minutes)")
-    print(f"Average rate: {len(preference_data)/elapsed:.2f} samples/second")
+    if elapsed > 0:
+        print(f"Average rate: {len(preference_data)/elapsed:.2f} samples/second")
 
 if __name__ == "__main__":
     mp.set_start_method('spawn', force=True)
@@ -378,6 +459,12 @@ if __name__ == "__main__":
         default=mp.cpu_count() // 2,
         help="Number of worker processes to use.",
     )
+    parser.add_argument(
+        "--checkpoint_interval",
+        type=int,
+        default=10000,
+        help="Save checkpoint every N samples (default: 10000).",
+    )
     
     args = parser.parse_args()
     main(args)
@@ -387,5 +474,6 @@ zstdcat data/raw/lichess_db_standard_rated_2024-08.pgn.zst | python -m scripts.0
     --sft_model_path models/sft_model \
     --output_file data/processed/preference_dataset_targeted.jsonl \
     --num_samples 500000 \
-    --min_elo 2000
+    --min_elo 2000 \
+    --checkpoint_interval 10000
 """
