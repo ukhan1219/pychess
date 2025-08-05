@@ -14,8 +14,6 @@ __pycache__/
 
 # Models and Checkpoints
 # These are artifacts produced by the training scripts.
-models/sft_model/checkpoint-*/
-models/reward_model_targeted/checkpoint-*/
 data/raw/lichess_db_standard_rated_2024-08.pgn.zst
 
 
