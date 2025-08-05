@@ -39,31 +39,31 @@ def main(args):
 
     training_args = RewardConfig(
         output_dir=args.output_dir,
-        per_device_train_batch_size=12,  # increased for better gradient estimates previously 4
-        gradient_accumulation_steps=2,  # effective batch size of 32 per device previously not needed
-        per_device_eval_batch_size=20,  # larger eval batch for efficiency previously not needed
-        num_train_epochs=2,  # reward models often need more epochs than SFT previously 1
-        max_steps=-1,  # let epochs determine training length previously not needed
-        logging_steps=250,  # less frequent logging for large datasets previously 10
-        save_steps=2500,  # save checkpoints every 1000 steps previously not needed
-        save_total_limit=6,  # keep more checkpoints for reward model analysis previously not needed
-        eval_strategy="steps",  # enable evaluation during training previously not needed
-        eval_steps=2500,  # evaluate every 1000 steps previously not needed
-        load_best_model_at_end=True,  # load best model based on eval loss previously not needed
-        metric_for_best_model="eval_loss",  # metric for best model previously not needed
-        greater_is_better=False,  # greater is better previously not needed
-        early_stopping_patience=3,  # stop if no improvement for 3 eval cycles previously not needed
-        learning_rate=1e-4,  # conservative LR for reward model stability previously 2e-5   
-        warmup_steps=1000,  # warmup for training stability previously not needed
-        lr_scheduler_type="cosine",  # cosine decay for better convergence previously not needed
-        weight_decay=0.01,  # regularization to prevent overfitting previously not needed
-        max_grad_norm=1.0,  # gradient clipping for stability previously not needed
+        per_device_train_batch_size=12,         # increased for better gradient estimates previously 4
+        gradient_accumulation_steps=2,          # effective batch size of 32 per device previously not needed
+        per_device_eval_batch_size=20,          # larger eval batch for efficiency previously not needed
+        num_train_epochs=2,                     # reward models often need more epochs than SFT previously 1
+        max_steps=-1,                           # let epochs determine training length previously not needed
+        logging_steps=250,                      # less frequent logging for large datasets previously 10
+        save_steps=2500,                        # save checkpoints every 1000 steps previously not needed
+        save_total_limit=6,                     # keep more checkpoints for reward model analysis previously not needed
+        eval_strategy="steps",                  # enable evaluation during training previously not needed
+        eval_steps=2500,                        # evaluate every 1000 steps previously not needed
+        load_best_model_at_end=True,            # load best model based on eval loss previously not needed
+        metric_for_best_model="eval_loss",      # metric for best model previously not needed
+        greater_is_better=False,                # greater is better previously not needed
+        early_stopping_patience=3,              # stop if no improvement for 3 eval cycles previously not needed
+        learning_rate=1e-4,                     # conservative LR for reward model stability previously 2e-5   
+        warmup_steps=1000,                      # warmup for training stability previously not needed
+        lr_scheduler_type="cosine",             # cosine decay for better convergence previously not needed
+        weight_decay=0.01,                      # regularization to prevent overfitting previously not needed
+        max_grad_norm=1.0,                      # gradient clipping for stability previously not needed
         fp16=use_fp16,
         bf16=False,
         remove_unused_columns=False,
-        dataloader_pin_memory=True,  # faster data loading previously not needed
-        report_to="none",  # disable wandb/tensorboard unless needed previously not needed
-        seed=42,  # reproducibility previously not needed
+        dataloader_pin_memory=True,             # faster data loading previously not needed
+        report_to="none",                       # disable wandb/tensorboard previously not needed
+        seed=42,                                # reproducibility previously not needed
     )
 
     model = AutoModelForSequenceClassification.from_pretrained(
@@ -76,8 +76,8 @@ def main(args):
     trainer = RewardTrainer(
         model=model,
         args=training_args,
-        train_dataset=train_dataset,  # previously not needed (train_dataset = dataset)
-        eval_dataset=eval_dataset, # previously not needed
+        train_dataset=train_dataset,            # previously not needed (train_dataset = dataset)
+        eval_dataset=eval_dataset,              # previously not needed
         processing_class=tokenizer,
     )
 
