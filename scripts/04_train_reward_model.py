@@ -11,10 +11,15 @@ import torch
 
 
 def main(args):
-    use_fp16 = torch.cuda.is_available()
-    if use_fp16:
+    # Check for CUDA and determine precision
+    use_cuda = torch.cuda.is_available()
+    use_bf16 = use_cuda and torch.cuda.is_bf16_supported()
+    use_fp16 = use_cuda and not use_bf16
+    
+    if use_bf16:
+        print("CUDA is available with bf16 support. Using BF16 for training.")
+    elif use_fp16:
         print("CUDA is available. Using FP16 for training.")
-
     else:
         print("CUDA is not available. Using FP32 for training.")
 
@@ -52,24 +57,23 @@ def main(args):
         load_best_model_at_end=True,            # load best model based on eval loss previously not needed
         metric_for_best_model="eval_loss",      # metric for best model previously not needed
         greater_is_better=False,                # greater is better previously not needed
-        early_stopping_patience=3,              # stop if no improvement for 3 eval cycles previously not needed
         learning_rate=1e-4,                     # conservative LR for reward model stability previously 2e-5   
         warmup_steps=1000,                      # warmup for training stability previously not needed
         lr_scheduler_type="cosine",             # cosine decay for better convergence previously not needed
         weight_decay=0.01,                      # regularization to prevent overfitting previously not needed
-        max_grad_norm=1.0,                      # gradient clipping for stability previously not needed
+        max_grad_norm=1.0 if not use_fp16 else 0.0,  # disable gradient clipping for fp16 to avoid unscaling issues
         fp16=use_fp16,
-        bf16=False,
+        bf16=use_bf16,
         remove_unused_columns=False,
         dataloader_pin_memory=True,             # faster data loading previously not needed
         report_to="none",                       # disable wandb/tensorboard previously not needed
         seed=42,                                # reproducibility previously not needed
     )
 
+    # Let the trainer handle dtype conversion automatically
     model = AutoModelForSequenceClassification.from_pretrained(
         args.base_model,
         num_labels=1,
-        torch_dtype=torch.float16 if use_fp16 else torch.float32,
     )
     model.config.pad_token_id = tokenizer.pad_token_id
     

@@ -78,7 +78,6 @@ def get_sft_move_batch(model, tokenizer, positions_data):
     
     results = []
     
-    # Use original batch size for performance
     batch_size = min(8, len(positions_data))
     
     for i in range(0, len(positions_data), batch_size):
@@ -94,7 +93,7 @@ def get_sft_move_batch(model, tokenizer, positions_data):
                         input_ids=inputs["input_ids"],
                         attention_mask=inputs["attention_mask"],
                         max_new_tokens=8,
-                        num_return_sequences=8,  # Restored to original 8 for performance
+                        num_return_sequences=8,  
                         do_sample=True,
                         top_k=40,
                         top_p=0.9,
@@ -104,9 +103,7 @@ def get_sft_move_batch(model, tokenizer, positions_data):
                     )
                 except RuntimeError as cuda_error:
                     if "CUDA" in str(cuda_error):
-                        # Handle CUDA errors gracefully
                         print(f"CUDA error in generation, retrying with smaller batch: {cuda_error}")
-                        # Force cleanup and retry with single items
                         if torch.cuda.is_available():
                             torch.cuda.empty_cache()
                         raise cuda_error
@@ -125,17 +122,15 @@ def get_sft_move_batch(model, tokenizer, positions_data):
                 move_san = parse_move_from_texts(prompt_texts, prompt, board)
                 results.append(move_san)
             
-            # Explicit cleanup
             del inputs, output_sequences, full_texts
             if torch.cuda.is_available():
                 try:
                     torch.cuda.synchronize()
                     torch.cuda.empty_cache()
                 except RuntimeError:
-                    pass  # Ignore cleanup errors
+                    pass  
                 
         except Exception as e:
-            # Cleanup on exception
             if torch.cuda.is_available():
                 try:
                     torch.cuda.synchronize()
@@ -161,7 +156,7 @@ def get_sft_move_single(model, tokenizer, board, prompt):
         output_sequences = model.generate(
             input_ids=inputs["input_ids"],
             max_new_tokens=8,
-            num_return_sequences=8,  # Restored to original 8
+            num_return_sequences=8,  
             do_sample=True,
             top_k=40,
             top_p=0.9,
@@ -173,7 +168,6 @@ def get_sft_move_single(model, tokenizer, board, prompt):
     full_texts = tokenizer.batch_decode(output_sequences, skip_special_tokens=True)
     result = parse_move_from_texts(full_texts, prompt, board)
     
-    # Explicit cleanup
     del inputs, output_sequences, full_texts
     if torch.cuda.is_available():
         try:
@@ -215,27 +209,20 @@ def worker_process(worker_id, game_queue, result_queue, args):
     try:
         print(f"Worker {worker_id}: Starting up...")
         
-        # Better approach: Use GPU for all workers but with proper CUDA context isolation
         device = "cuda" if torch.cuda.is_available() else "cpu"
         use_gpu = torch.cuda.is_available()
         
         print(f"Worker {worker_id}: Using device: {device}")
         
-        # Set unique CUDA context for each worker to prevent conflicts
         if use_gpu:
-            # Use modulo to distribute workers across available GPUs
             gpu_id = worker_id % torch.cuda.device_count()
             torch.cuda.set_device(gpu_id)
-            # Create separate CUDA context and initialize properly
             torch.cuda.empty_cache()
-            # Force CUDA context creation
             _ = torch.tensor([1.0]).cuda()
         
-        # Load model with error handling
         try:
             sft_model = AutoModelForCausalLM.from_pretrained(args.sft_model_path).to(device)
             if use_gpu:
-                # Ensure model is properly loaded on GPU
                 torch.cuda.synchronize()
         except Exception as e:
             print(f"Worker {worker_id}: Failed to load model on GPU, falling back to CPU: {e}")
@@ -265,11 +252,10 @@ def worker_process(worker_id, game_queue, result_queue, args):
                 games_processed += 1
                 memory_cleanup_counter += 1
                 
-                # Periodic memory cleanup every 50 games
                 if memory_cleanup_counter >= 50:
                     if use_gpu:
                         try:
-                            torch.cuda.synchronize()  # Wait for all operations to complete
+                            torch.cuda.synchronize()  
                             torch.cuda.empty_cache()
                         except RuntimeError as e:
                             print(f"Worker {worker_id}: CUDA cleanup error: {e}")
@@ -352,7 +338,6 @@ def worker_process(worker_id, game_queue, result_queue, args):
                     continue
                 
                 if games_processed % 100 == 0:
-                    # Memory monitoring
                     process = psutil.Process()
                     memory_mb = process.memory_info().rss / 1024 / 1024
                     gpu_memory_str = ""
@@ -383,7 +368,6 @@ def main(args):
     print(f"Starting parallel preference data generation with {args.num_workers} workers...")
     print(f"Target: {args.num_samples} samples")
     
-    # load existing checkpoint data if available
     preference_data = load_existing_checkpoints(args.output_file)
     starting_samples = len(preference_data)
     
@@ -450,7 +434,6 @@ def main(args):
                 preference_data.append(result)
                 pbar.update(1)
                 
-                # check if we should save a checkpoint
                 if len(preference_data) - last_checkpoint >= checkpoint_interval:
                     checkpoint_num = len(preference_data) // checkpoint_interval
                     save_checkpoint(preference_data, args.output_file, checkpoint_num)
@@ -475,7 +458,6 @@ def main(args):
                 
     except KeyboardInterrupt:
         print("Interrupted by user")
-        # save a final checkpoint on interruption
         if len(preference_data) > last_checkpoint:
             checkpoint_num = (len(preference_data) // checkpoint_interval) + 1
             save_checkpoint(preference_data, args.output_file, checkpoint_num)
@@ -509,9 +491,8 @@ def main(args):
         print(f"Average rate: {len(preference_data)/elapsed:.2f} samples/second")
 
 if __name__ == "__main__":
-    # Set environment variables for better CUDA multiprocessing
-    os.environ['CUDA_LAUNCH_BLOCKING'] = '0'  # Allow async CUDA operations
-    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:128'  # Better memory management
+    os.environ['CUDA_LAUNCH_BLOCKING'] = '0'  
+    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:128'  
     
     mp.set_start_method('spawn', force=True)
     
@@ -549,7 +530,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_workers",
         type=int,
-        default=min(4, mp.cpu_count() // 2),  # Conservative default to prevent CUDA conflicts
+        default=min(4, mp.cpu_count() // 2),  
         help="Number of worker processes to use.",
     )
     parser.add_argument(
