@@ -3,37 +3,30 @@ import argparse
 import json
 from tqdm import tqdm
 import sys
-import datetime
 import os
 
+# compute the absolute path of this file then go up one directory to get project root and store it
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
 """
-    this script processes chess games in PGN format and prepares them for supervised fine-tuning (SFT).
-    then it filters out low-quality games based on various criteria such as player titles, Elo ratings, and game dates.
-    then it converts the games into a space-separated string of moves and saves them in a JSONL format.
-    and it allows you to specify the maximum number of games to process and the minimum Elo rating for a game to be considered high quality.
-    it also supports reading from standard input or a file.and it outputs the processed games to a specified JSONL file.
+prepare sft data from pgn by filtering games for quality and writing jsonl of space separated move sequences
+supports reading from stdin or a file and limits by max games and minimum elo
 """
 
-
+# ensure python can import modules from the project root by adding it to the system path
 from src.chess_utils import is_game_high_quality
 
 
 def game_to_move_sequence(game):
     """
-    Converts a chess game to a space separated string of moves.
+    convert a chess game to a space separated string of moves
     """
-
+    # prepare an empty list to collect san move strings from the game
     moves = []
-
     board = game.board()
-
-    # this will iterate through the mainline moves of the game
-    # and push them to the board
-    # mainline moves are the moves played in the game
-    # mainline_moves() returns a generator of moves
+    
+    # iterate the main line moves of the game convert each move to san append to list and push the move on the board to advance position
     for move in game.mainline_moves():
         san_move = board.san(move)
         
@@ -45,9 +38,14 @@ def game_to_move_sequence(game):
 
 
 def main(args):
+    """
+    read games from input filter by quality and write jsonl lines of move sequences until max games is reached
+    """
+    # read from standard input when input file is a single dash this allows piping compressed pgn data
     if args.input_file == "-":
         print("Reading from standard input...")
         pgn_stream = sys.stdin
+    # otherwise open the provided pgn file path for reading text
     else:
         print(f"Reading from {args.input_file}...")
         pgn_stream = open(args.input_file)
@@ -55,30 +53,28 @@ def main(args):
     processed_games = 0
     skipped_games = 0
 
-    # this will read the PGN file and process each game
+    # open the output jsonl file using a with block which opens the file and closes it automatically when done even if an error occurs
     with open(args.output_file, "w") as output_file:
-        # the iter() function creates an iterator that reads games from the PGN stream
-        # pgn_stream is a file-like object that contains the PGN data
-        # PGN is a standard format for recording chess games
+        # build an iterator that repeatedly reads the next game from the pgn stream until no game is returned
         game_iterator = iter(lambda: chess.pgn.read_game(pgn_stream), None)
+        # iterate over each game and show a progress bar while processing
         for game in tqdm(game_iterator, desc="Processing games"):
             if game is None:
                 continue
-
-            # try block to handle any exceptions that may occur during processing
+            # try block attempts to filter and serialize the game and the except block handles any error by skipping the game and continuing
             try:
+                # check whether the game meets quality criteria such as minimum elo and metadata then if true write its move sequence to jsonl
                 if is_game_high_quality(game, args.min_elo):
-                    # this will convert the game to a space separated string of moves
-                    # and save it to the output file
                     move_sequence = game_to_move_sequence(game)
                     output_file.write(json.dumps({"text": move_sequence}) + "\n")
                     processed_games += 1
+                # otherwise count the game as skipped due to quality filters
                 else:
                     skipped_games += 1
             except Exception as e:
                 skipped_games += 1
-                continue  # Skip this game if any error occurs
-
+                continue
+            # stop processing once the number of processed games reaches the configured maximum
             if processed_games >= args.max_games:
                 print(f"\nReached max games limit of {args.max_games}.")
                 break
@@ -113,15 +109,11 @@ if __name__ == "__main__":
     main(args)
 
 
-# sample command:
-# Make sure you have zstd installed (e.g., sudo apt-get install zstd)
 """
-MAC:
-    zstdcat data/raw/lichess_db_standard_rated_2024-08.pgn.zst | python scripts/01_prepare_sft_data.py \
-        --input_file - \
-        --output_file data/processed/sft_dataset_filtered.jsonl \
-        --max_games 1000000 \
-        --min_elo 2000
+zstdcat data/raw/lichess_db_standard_rated_2024-08.pgn.zst | python scripts/01_prepare_sft_data.py \
+    --input_file - \
+    --output_file data/processed/sft_dataset_filtered.jsonl \
+    --max_games 1000000 \
+    --min_elo 2000
 
 """
-
