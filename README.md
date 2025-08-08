@@ -35,7 +35,7 @@ The project is structured as a journey of increasing scale and sophistication:
 - **How it Works:** The Actor makes a move, and the Reward Model provides a score. PPO uses this score, balanced by the Critic's evaluation, to update the Actor's policy. This loop encourages the Actor to discover strategies that consistently earn high rewards from our AI coach.
 - **Key Technologies:** `trl.PPOTrainer`, `AutoModelForCausalLMWithValueHead`.
 
-### Phase 4: Scaling the Pipeline - Distributed Architecture
+### Phase 4: Scaling the Pipeline - Distributed Architecture (WIP)
 
 - **Goal:** To refactor the single-machine prototype to handle massive datasets and run efficiently in the cloud, addressing the primary performance bottlenecks.
 - **How it Works:**
@@ -43,7 +43,7 @@ The project is structured as a journey of increasing scale and sophistication:
   2.  **Centralized Storage (AWS S3 / Parquet):** All data is moved from local files to a cloud object store like **AWS S3**. We switch from JSONL to **Apache Parquet**, a columnar format optimized for large-scale, parallel data processing. This decouples storage from compute.
   3.  **Distributed Data Generation (Ray):** The preference data generation step—the biggest bottleneck—is parallelized using **Ray**. A Ray cluster of hundreds of CPU-based cloud machines can be spun up to generate millions of preference pairs simultaneously, turning a multi-day process into a multi-hour one.
 
-### Phase 5: Automation and MLOps - Production-Grade Systems
+### Phase 5: Automation and MLOps - Production-Grade Systems (WIP)
 
 - **Goal:** To transform the scaled components into a robust, automated, and trackable workflow suitable for a production environment.
 - **How it Works:**
