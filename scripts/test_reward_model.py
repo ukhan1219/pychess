@@ -5,8 +5,7 @@ import argparse
 from transformers import AutoModelForCausalLM, AutoModelForSequenceClassification, AutoTokenizer
 from typing import Dict
 
-STOCKFISH_PATH = "./stockfish/stockfish-macos-x86-64-bmi2"
-STOCKFISH_PATH_WSL = "./stockfish/stockfish-ubuntu-x86-64-avx2"
+from src.chess_utils import resolve_stockfish_path
 
 """
 test reward model by comparing its ranking of sft and stockfish moves across positions and print summaries
@@ -125,7 +124,17 @@ def main(args):
     reward_model = AutoModelForSequenceClassification.from_pretrained(args.reward_model_path).to(device)
 
     # launch a stockfish engine process via uci protocol for best move queries
-    engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH_WSL)
+    engine_path = resolve_stockfish_path()
+    if not engine_path:
+        raise RuntimeError(
+            "Could not locate a Stockfish binary. Install via Homebrew ('brew install stockfish') or ensure an executable exists in './stockfish/'."
+        )
+    try:
+        engine = chess.engine.SimpleEngine.popen_uci(engine_path)
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to launch Stockfish at '{engine_path}'. Ensure it is executable and compatible with your OS."
+        ) from e
 
     # ensure both tokenizers have pad tokens to support batch tokenization
     if sft_tokenizer.pad_token is None:
