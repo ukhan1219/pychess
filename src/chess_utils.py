@@ -1,4 +1,10 @@
 import datetime
+import os
+import shutil
+import platform
+
+STOCKFISH_PATH = "./stockfish/stockfish-macos-x86-64-bmi2"
+STOCKFISH_PATH_WSL = "./stockfish/stockfish-ubuntu-x86-64-avx2"
 
 def is_game_high_quality(game, min_elo=2000):
     """
@@ -31,3 +37,26 @@ def is_game_high_quality(game, min_elo=2000):
         return False
 
     return True
+
+def resolve_stockfish_path():
+    """Resolve a working Stockfish binary for this platform."""
+    candidates = []
+    # Paths relative to project root (one level up from this script)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(script_dir)
+    mac_bin = os.path.join(project_root, "stockfish", "stockfish-macos-x86-64-bmi2")
+    linux_bin = os.path.join(project_root, "stockfish", "stockfish-ubuntu-x86-64-avx2")
+    path_binary = shutil.which("stockfish")
+    if path_binary:
+        candidates.append(path_binary)
+    system = platform.system().lower()
+    if system == "darwin":
+        candidates.extend([mac_bin, STOCKFISH_PATH])
+    elif system == "linux":
+        candidates.extend([linux_bin, STOCKFISH_PATH_WSL])
+    else:
+        candidates.extend([mac_bin, linux_bin, STOCKFISH_PATH, STOCKFISH_PATH_WSL])
+    for cand in candidates:
+        if cand and os.path.exists(cand) and os.access(cand, os.X_OK):
+            return cand
+    return candidates[0] if candidates else None

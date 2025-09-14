@@ -21,12 +21,9 @@ import psutil
 generate preference data by comparing sft model moves to stockfish using parallel workers and write jsonl samples
 supports checkpointing resuming and basic memory management
 """
-# paths to stockfish engine binaries that the script will launch for move evaluation
-STOCKFISH_PATH = "./stockfish/stockfish-macos-x86-64-bmi2"
-STOCKFISH_PATH_WSL = "./stockfish/stockfish-ubuntu-x86-64-avx2"
 
 # import the helper that checks if a chess game meets quality requirements such as min elo
-from src.chess_utils import is_game_high_quality
+from src.chess_utils import is_game_high_quality, resolve_stockfish_path
 
 # set transformer logging to error to reduce console noise during heavy generation
 logging.getLogger("transformers").setLevel(logging.ERROR)
@@ -284,7 +281,17 @@ def worker_process(worker_id, game_queue, result_queue, args):
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
         # launch the stockfish engine for move evaluation
-        engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH_WSL)
+        engine_path = resolve_stockfish_path()
+        if not engine_path:
+            raise RuntimeError(
+                "Could not locate a Stockfish binary. Install via Homebrew ('brew install stockfish') or ensure an executable exists in './stockfish/'."
+            )
+        try:
+            engine = chess.engine.SimpleEngine.popen_uci(engine_path)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to launch Stockfish at '{engine_path}'. Ensure it is executable and compatible with your OS."
+            ) from e
         
         print(f"Worker {worker_id}: Ready to process games")
         # initialize counters for tracking progress and memory cleanup
